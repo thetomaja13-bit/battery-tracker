@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battery Tracker - NMU</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            padding: 40px 35px;
+            max-width: 520px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .logo { font-size: 48px; margin-bottom: 5px; }
+        .header h1 { color: #1a3c34; font-size: 22px; font-weight: 700; }
+        .header .subtitle { color: #666; font-size: 14px; }
+
+        .battery-badge {
+            background: linear-gradient(135deg, #1a3c34, #2d5a4e);
+            color: white;
+            border-radius: 12px;
+            padding: 15px 20px;
+            text-align: center;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(26, 60, 52, 0.25);
+        }
+
+        .battery-badge .label { font-size: 12px; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
+        .battery-badge .battery-id { font-size: 28px; font-weight: 700; font-family: 'Courier New', monospace; letter-spacing: 2px; margin-top: 2px; }
+
+        .battery-specs {
+            margin-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            padding-top: 12px;
+            font-size: 13px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 15px;
+            text-align: left;
+        }
+        .battery-specs .spec-item { display: flex; align-items: center; gap: 6px; }
+        .battery-specs .spec-item .value { font-weight: 500; }
+
+        .form-group { margin-bottom: 18px; }
+        label { display: block; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 5px; }
+
+        input, select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e5ec;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fc;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #2d5a4e;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(45, 90, 78, 0.1);
+        }
+
+        select {
+            appearance: none;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            padding-right: 40px;
+        }
+
+        .cell-inputs {
+            background: #f8f9fc;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 18px;
+            border: 2px solid #e0e5ec;
+        }
+
+        .cell-inputs .section-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 15px;
+            text-align: center;
+        }
+
+        .cell-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .cell-row label {
+            min-width: 80px;
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 0;
+        }
+
+        .cell-row input {
+            flex: 1;
+            padding: 10px 12px;
+            font-size: 15px;
+        }
+
+        .cell-row .unit {
+            font-weight: 500;
+            color: #666;
+            min-width: 20px;
+        }
+
+        .health-status {
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 18px;
+            border: 2px solid #e0e5ec;
+            background: #f8f9fc;
+        }
+
+        .health-status .status-icon { font-size: 28px; text-align: center; }
+        .health-status .status-text { font-weight: 700; text-align: center; font-size: 17px; }
+        .health-status .status-detail { text-align: center; font-size: 14px; color: #555; margin-top: 4px; }
+        .health-status .status-volts { text-align: center; font-size: 13px; color: #666; margin-top: 3px; }
+
+        .health-status.good { border-color: #28a745; background: #d4edda; }
+        .health-status.good .status-text { color: #155724; }
+        .health-status.warning { border-color: #ffc107; background: #fff3cd; }
+        .health-status.warning .status-text { color: #856404; }
+        .health-status.danger { border-color: #dc3545; background: #f8d7da; }
+        .health-status.danger .status-text { color: #721c24; }
+        .health-status.info { border-color: #17a2b8; background: #d1ecf1; }
+        .health-status.info .status-text { color: #0c5460; }
+
+        .hidden { display: none; }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #1a3c34, #2d5a4e);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 5px;
+            letter-spacing: 0.5px;
+        }
+        .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(26, 60, 52, 0.35); }
+        .submit-btn:active { transform: scale(0.98); }
+
+        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #999; }
+
+        @media (max-width: 480px) {
+            .container { padding: 25px 20px; }
+            .header h1 { font-size: 18px; }
+            .battery-badge .battery-id { font-size: 22px; }
+            .cell-row { flex-wrap: wrap; }
+            .cell-row label { min-width: 100%; }
+            .battery-specs { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🔋</div>
+            <h1>Battery Tracker</h1>
+            <span class="subtitle">Nelson Mandela University</span>
+        </div>
+
+        <div class="battery-badge">
+            <div class="label">Battery ID</div>
+            <div class="battery-id">{{ battery_id }}</div>
+            {% if battery_info %}
+            <div class="battery-specs">
+                {% if battery_info.brand %}<div class="spec-item">🏷️ <span class="value">{{ battery_info.brand }}</span></div>{% endif %}
+                {% if battery_info.type %}<div class="spec-item">🔋 <span class="value">{{ battery_info.type }}</span></div>{% endif %}
+                {% if battery_info.capacity %}<div class="spec-item">📊 <span class="value">{{ battery_info.capacity }} mAh</span></div>{% endif %}
+                {% if battery_info.voltage %}<div class="spec-item">⚡ <span class="value">{{ battery_info.voltage }}V</span></div>{% endif %}
+                {% if battery_info.cells %}<div class="spec-item">🔋 <span class="value">{{ battery_info.cells }}</span></div>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <form method="POST" id="batteryForm">
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" placeholder="Enter your full name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="usertype">User Type</label>
+                <select id="usertype" name="usertype" required>
+                    <option value="">Select user type...</option>
+                    <option value="Student">🎓 Student</option>
+                    <option value="Staff">👨‍🏫 Staff</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="action">Action</label>
+                <select id="action" name="action" required onchange="toggleCellInputs()">
+                    <option value="">Select action...</option>
+                    <option value="Borrow">📤 Borrow</option>
+                    <option value="Return">📥 Return</option>
+                </select>
+            </div>
+
+            <div id="cellInputs" class="cell-inputs hidden">
+                <div class="section-title">📊 Enter Cell Voltages</div>
+                <div id="cellInputsContainer"></div>
+                <div style="font-size: 12px; color: #888; margin-top: 8px; text-align: center;">
+                    Use a LiPo checker to measure each cell voltage
+                </div>
+            </div>
+
+            <div id="healthStatus" class="health-status hidden">
+                <div class="status-icon" id="statusIcon">✅</div>
+                <div class="status-text" id="statusText">Battery is in good condition</div>
+                <div class="status-detail" id="statusDetail">All cells balanced</div>
+                <div class="status-volts" id="statusVolts">⚡ Avg: 3.85V | Diff: 0.02V</div>
+            </div>
+
+            <input type="hidden" id="autoCondition" name="condition" value="">
+
+            <button type="submit" class="submit-btn">✓ Submit</button>
+        </form>
+
+        <div class="footer">NMU Battery Management System</div>
+    </div>
+
+    <script>
+        const cellCount = {{ battery_info.cells|default('3S')|replace('S', '')|int if battery_info and battery_info.cells else 3 }};
+        const actionSelect = document.getElementById('action');
+        const cellInputsDiv = document.getElementById('cellInputs');
+        const cellContainer = document.getElementById('cellInputsContainer');
+        const healthStatus = document.getElementById('healthStatus');
+        const autoCondition = document.getElementById('autoCondition');
+
+        function toggleCellInputs() {
+            if (actionSelect.value === 'Borrow' || actionSelect.value === 'Return') {
+                cellInputsDiv.classList.remove('hidden');
+                generateCellInputs();
+            } else {
+                cellInputsDiv.classList.add('hidden');
+                healthStatus.classList.add('hidden');
+            }
+        }
+
+        function generateCellInputs() {
+            const count = cellCount || 3;
+            let html = '';
+            for (let i = 1; i <= count; i++) {
+                html += `
+                    <div class="cell-row">
+                        <label for="cell${i}">Cell ${i}:</label>
+                        <input type="number" step="0.01" id="cell${i}" name="cell${i}" 
+                               placeholder="0.00" min="0" max="5" 
+                               oninput="checkHealth()" required>
+                        <span class="unit">V</span>
+                    </div>
+                `;
+            }
+            cellContainer.innerHTML = html;
+            healthStatus.classList.add('hidden');
+            autoCondition.value = '';
+        }
+
+        function checkHealth() {
+            const count = cellCount || 3;
+            const voltages = [];
+            let allFilled = true;
+
+            for (let i = 1; i <= count; i++) {
+                const val = document.getElementById(`cell${i}`)?.value;
+                if (val && parseFloat(val) > 0) {
+                    voltages.push(parseFloat(val));
+                } else {
+                    allFilled = false;
+                }
+            }
+
+            if (!allFilled || voltages.length < count) {
+                healthStatus.classList.add('hidden');
+                autoCondition.value = '';
+                return;
+            }
+
+            const minV = Math.min(...voltages);
+            const maxV = Math.max(...voltages);
+            const avgV = voltages.reduce((a, b) => a + b, 0) / voltages.length;
+            const diffV = maxV - minV;
+
+            let status = '';
+            let detail = '';
+            let icon = '';
+            let cssClass = '';
+            let condition = '';
+
+            if (minV < 3.50) {
+                condition = 'Danger - Very Low Voltage';
+                status = '🚨 CRITICAL: Very Low Voltage!';
+                detail = `Min: ${minV.toFixed(2)}V - DO NOT CHARGE! Battery may be damaged.`;
+                icon = '🚨';
+                cssClass = 'danger';
+            } else if (maxV > 4.25) {
+                condition = 'Danger - Overcharged';
+                status = '🚨 CRITICAL: Overcharged!';
+                detail = `Max: ${maxV.toFixed(2)}V - UNSAFE! Do not use.`;
+                icon = '🚨';
+                cssClass = 'danger';
+            } else if (diffV > 0.10) {
+                condition = 'Danger - Unbalanced';
+                status = '🚨 SEVERE: Cells Unbalanced!';
+                detail = `Difference: ${diffV.toFixed(3)}V - Battery needs inspection.`;
+                icon = '🚨';
+                cssClass = 'danger';
+            } else if (diffV > 0.05) {
+                condition = 'Warning - Slightly Unbalanced';
+                status = '⚠️ Warning: Cells Slightly Unbalanced';
+                detail = `Difference: ${diffV.toFixed(3)}V - Balance recommended.`;
+                icon = '⚡';
+                cssClass = 'warning';
+            } else if (avgV >= 4.18 && avgV <= 4.22) {
+                condition = 'Good - Full Charge';
+                status = '✅ Full Charge';
+                detail = 'Battery is fully charged and ready for use.';
+                icon = '✅';
+                cssClass = 'good';
+            } else if (avgV >= 3.80 && avgV <= 3.85) {
+                condition = 'Good - Storage Voltage';
+                status = '✅ Storage Voltage';
+                detail = 'Battery is at ideal storage voltage.';
+                icon = '✅';
+                cssClass = 'good';
+            } else if (avgV >= 3.70 && avgV < 3.80) {
+                condition = 'Warning - Low Voltage';
+                status = '⚠️ Low Voltage';
+                detail = `Charge to storage voltage (3.80-3.85V).`;
+                icon = '⚡';
+                cssClass = 'warning';
+            } else if (avgV >= 3.50 && avgV < 3.70) {
+                condition = 'Warning - Very Low Voltage';
+                status = '⚠️ Very Low Voltage';
+                detail = `Charge immediately! Current: ${avgV.toFixed(2)}V`;
+                icon = '⚠️';
+                cssClass = 'warning';
+            } else if (avgV > 4.22 && avgV <= 4.25) {
+                condition = 'Warning - Slightly Overcharged';
+                status = '⚠️ Slightly Overcharged';
+                detail = `Voltage: ${avgV.toFixed(2)}V - Consider discharging.`;
+                icon = '⚠️';
+                cssClass = 'warning';
+            } else {
+                condition = 'Good - Ready for Use';
+                status = '✅ Ready for Use';
+                detail = `Battery is in acceptable condition.`;
+                icon = '✅';
+                cssClass = 'good';
+            }
+
+            autoCondition.value = condition;
+
+            healthStatus.className = `health-status ${cssClass}`;
+            document.getElementById('statusIcon').textContent = icon;
+            document.getElementById('statusText').textContent = status;
+            document.getElementById('statusDetail').textContent = detail;
+            document.getElementById('statusVolts').textContent = 
+                `⚡ Avg: ${avgV.toFixed(3)}V | Diff: ${diffV.toFixed(3)}V | Min: ${minV.toFixed(2)}V | Max: ${maxV.toFixed(2)}V`;
+            healthStatus.classList.remove('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (actionSelect.value === 'Borrow' || actionSelect.value === 'Return') {
+                toggleCellInputs();
+            }
+        });
+    </script>
+</body>
+</html>
