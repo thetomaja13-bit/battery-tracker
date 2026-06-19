@@ -3,12 +3,50 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import re
+import os
+import json
 
 app = Flask(__name__)
 
+# --- Find credentials.json in multiple locations ---
+def find_credentials():
+    # Possible locations
+    possible_paths = [
+        "credentials.json",  # Current directory
+        "/etc/secrets/credentials.json",  # Render's Secret File location
+        os.path.join(os.path.dirname(__file__), "credentials.json"),  # Same folder as app.py
+        os.path.join(os.getcwd(), "credentials.json"),  # Working directory
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            print(f"Found credentials at: {path}")
+            return path
+    
+    # If not found, try to read from environment variable
+    env_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if env_json:
+        print("Using credentials from environment variable")
+        # Save it to a temporary file
+        temp_path = "/tmp/credentials.json"
+        with open(temp_path, "w") as f:
+            f.write(env_json)
+        return temp_path
+    
+    raise FileNotFoundError("Could not find credentials.json anywhere")
+
 # Google Sheets setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+
+# Find and load credentials
+try:
+    creds_path = find_credentials()
+    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
+    print("✅ Credentials loaded successfully!")
+except Exception as e:
+    print(f"❌ Error loading credentials: {e}")
+    raise
+
 client = gspread.authorize(creds)
 
 SHEET_ID = "1U3VIktKv4S0w5SUx6IE2XIhiV63f9YA1s6CxSOBtNeg"
@@ -16,30 +54,26 @@ SHEET_ID = "1U3VIktKv4S0w5SUx6IE2XIhiV63f9YA1s6CxSOBtNeg"
 spreadsheet = client.open_by_key(SHEET_ID)
 
 # --- Get or create sheets ---
-# Sheet1 - Battery Log
 try:
     sheet = spreadsheet.worksheet("Sheet1")
 except gspread.exceptions.WorksheetNotFound:
     sheet = spreadsheet.sheet1
 
-# Battery Status
 try:
-    status_sheet = spreadsheet.worksheet(" Battery Status")  # Has a space before
+    status_sheet = spreadsheet.worksheet(" Battery Status")
 except gspread.exceptions.WorksheetNotFound:
     try:
-        status_sheet = spreadsheet.worksheet("Battery Status")  # Without space
+        status_sheet = spreadsheet.worksheet("Battery Status")
     except gspread.exceptions.WorksheetNotFound:
         status_sheet = spreadsheet.add_worksheet(title=" Battery Status", rows="100", cols="3")
         status_sheet.update('A1:C1', [['Battery ID', 'Status', 'Holder']])
 
-# Battery Inventory
 try:
     inventory_sheet = spreadsheet.worksheet("Battery Inventory")
 except gspread.exceptions.WorksheetNotFound:
     inventory_sheet = spreadsheet.add_worksheet(title="Battery Inventory", rows="100", cols="6")
     inventory_sheet.update('A1:F1', [['Battery ID', 'Brand', 'Type', 'Capacity (mAh)', 'Voltage (V)', 'Cells']])
 
-# Cell Voltages
 try:
     voltage_sheet = spreadsheet.worksheet("Cell Voltages")
 except gspread.exceptions.WorksheetNotFound:
@@ -49,19 +83,14 @@ except gspread.exceptions.WorksheetNotFound:
                                     'Min Voltage', 'Max Voltage', 'Difference', 'Condition']])
 
 def parse_cells(cells_str):
-    """Extract number from cells string like '3S' -> 3"""
     if not cells_str:
         return 3
     match = re.search(r'(\d+)', str(cells_str))
     return int(match.group(1)) if match else 3
 
 def update_battery_status(battery_id, action, name):
-    """Update or add battery in status sheet"""
     try:
-        # Get all battery IDs from column A
         status_ids = status_sheet.col_values(1)
-        
-        # Find the battery
         row_number = None
         for i, bid in enumerate(status_ids, start=1):
             if bid.strip() == battery_id:
@@ -69,7 +98,6 @@ def update_battery_status(battery_id, action, name):
                 break
         
         if row_number:
-            # Battery exists - update it
             if action == "Borrow":
                 status_sheet.update_cell(row_number, 2, "Borrowed")
                 status_sheet.update_cell(row_number, 3, name)
@@ -79,17 +107,14 @@ def update_battery_status(battery_id, action, name):
                 status_sheet.update_cell(row_number, 3, "")
                 print(f"✅ Updated: {battery_id} -> Available")
         else:
-            # Battery not found - add it
             new_row = [battery_id, "Borrowed" if action == "Borrow" else "Available", name if action == "Borrow" else ""]
             status_sheet.append_row(new_row)
             print(f"✅ Added new battery: {battery_id} -> {new_row[1]}")
-            
     except Exception as e:
         print(f"❌ Status update error: {e}")
 
 @app.route('/battery/<battery_id>', methods=['GET', 'POST'])
 def battery_form(battery_id):
-    # Get battery info from inventory
     battery_info = None
     try:
         battery_ids = inventory_sheet.col_values(1)
@@ -111,11 +136,10 @@ def battery_form(battery_id):
         name = request.form['name']
         usertype = request.form['usertype']
         action = request.form['action']
-        condition = request.form['condition']  # Auto-detected from JavaScript
+        condition = request.form['condition']
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Get cell voltages
         cell_count = parse_cells(battery_info['cells'] if battery_info else '3S')
         cell_voltages = []
         for i in range(1, cell_count + 1):
@@ -123,7 +147,6 @@ def battery_form(battery_id):
             val = request.form.get(cell_key, '')
             cell_voltages.append(val if val else '')
         
-        # Calculate health stats
         valid_voltages = [float(v) for v in cell_voltages if v and float(v) > 0]
         if valid_voltages:
             min_v = min(valid_voltages)
@@ -132,10 +155,8 @@ def battery_form(battery_id):
         else:
             min_v = max_v = diff_v = ''
         
-        # Append to Sheet1 (Battery Log)
-        sheet.append_row([timestamp, battery_id, name, usertype, action, condition])
+        sheet.append_row([timestamp, battery_id, name, request.form['usertype'], action, condition])
         
-        # Prepare row for voltage sheet
         voltage_row = [timestamp, battery_id, name, action]
         for i in range(6):
             voltage_row.append(cell_voltages[i] if i < len(cell_voltages) else '')
@@ -146,7 +167,6 @@ def battery_form(battery_id):
         except Exception as e:
             print(f"Voltage logging error: {e}")
         
-        # Update Battery Status
         update_battery_status(battery_id, action, name)
         
         return "Submission Recorded Successfully"
@@ -154,5 +174,4 @@ def battery_form(battery_id):
     return render_template('battery_form.html', battery_id=battery_id, battery_info=battery_info)
 
 if __name__ == '__main__':
-    # host='0.0.0.0' makes it accessible from other devices on your network
     app.run(host='0.0.0.0', debug=True)
