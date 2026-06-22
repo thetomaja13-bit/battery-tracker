@@ -5,12 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Battery Tracker - NMU</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -20,50 +15,18 @@
             align-items: center;
             padding: 20px;
         }
-
         .container {
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
             padding: 40px 35px;
-            max-width: 520px;
+            max-width: 550px;
             width: 100%;
         }
-
-        .header {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
+        .header { text-align: center; margin-bottom: 25px; }
         .logo { font-size: 48px; margin-bottom: 5px; }
         .header h1 { color: #1a3c34; font-size: 22px; font-weight: 700; }
         .header .subtitle { color: #666; font-size: 14px; }
-
-        .battery-badge {
-            background: linear-gradient(135deg, #1a3c34, #2d5a4e);
-            color: white;
-            border-radius: 12px;
-            padding: 15px 20px;
-            text-align: center;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 15px rgba(26, 60, 52, 0.25);
-        }
-
-        .battery-badge .label { font-size: 12px; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
-        .battery-badge .battery-id { font-size: 28px; font-weight: 700; font-family: 'Courier New', monospace; letter-spacing: 2px; margin-top: 2px; }
-
-        .battery-specs {
-            margin-top: 12px;
-            border-top: 1px solid rgba(255,255,255,0.2);
-            padding-top: 12px;
-            font-size: 13px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 4px 15px;
-            text-align: left;
-        }
-        .battery-specs .spec-item { display: flex; align-items: center; gap: 6px; }
-        .battery-specs .spec-item .value { font-weight: 500; }
 
         .form-group { margin-bottom: 18px; }
         label { display: block; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 5px; }
@@ -79,7 +42,6 @@
             font-family: inherit;
             box-sizing: border-box;
         }
-
         input:focus, select:focus {
             outline: none;
             border-color: #2d5a4e;
@@ -87,14 +49,30 @@
             box-shadow: 0 0 0 4px rgba(45, 90, 78, 0.1);
         }
 
-        select {
-            appearance: none;
-            cursor: pointer;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 16px center;
-            padding-right: 40px;
+        .battery-info-card {
+            background: linear-gradient(135deg, #1a3c34, #2d5a4e);
+            color: white;
+            border-radius: 12px;
+            padding: 15px 20px;
+            text-align: center;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(26, 60, 52, 0.25);
         }
+        .battery-info-card .label { font-size: 12px; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
+        .battery-info-card .battery-id { font-size: 28px; font-weight: 700; font-family: 'Courier New', monospace; letter-spacing: 2px; margin-top: 2px; }
+        .battery-specs {
+            margin-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            padding-top: 12px;
+            font-size: 13px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 15px;
+            text-align: left;
+        }
+        .battery-specs .spec-item { display: flex; align-items: center; gap: 6px; }
+        .battery-specs .spec-item .value { font-weight: 500; }
+        .no-specs { margin-top: 10px; font-size: 12px; opacity: 0.7; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px; }
 
         .cell-inputs {
             background: #f8f9fc;
@@ -103,40 +81,11 @@
             margin-bottom: 18px;
             border: 2px solid #e0e5ec;
         }
-
-        .cell-inputs .section-title {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 12px;
-            font-size: 15px;
-            text-align: center;
-        }
-
-        .cell-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
-
-        .cell-row label {
-            min-width: 80px;
-            font-weight: 500;
-            font-size: 14px;
-            margin-bottom: 0;
-        }
-
-        .cell-row input {
-            flex: 1;
-            padding: 10px 12px;
-            font-size: 15px;
-        }
-
-        .cell-row .unit {
-            font-weight: 500;
-            color: #666;
-            min-width: 20px;
-        }
+        .cell-inputs .section-title { font-weight: 600; color: #333; margin-bottom: 12px; font-size: 15px; text-align: center; }
+        .cell-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .cell-row label { min-width: 80px; font-weight: 500; font-size: 14px; margin-bottom: 0; }
+        .cell-row input { flex: 1; padding: 10px 12px; font-size: 15px; }
+        .cell-row .unit { font-weight: 500; color: #666; min-width: 20px; }
 
         .health-status {
             border-radius: 12px;
@@ -145,12 +94,10 @@
             border: 2px solid #e0e5ec;
             background: #f8f9fc;
         }
-
         .health-status .status-icon { font-size: 28px; text-align: center; }
         .health-status .status-text { font-weight: 700; text-align: center; font-size: 17px; }
         .health-status .status-detail { text-align: center; font-size: 14px; color: #555; margin-top: 4px; }
         .health-status .status-volts { text-align: center; font-size: 13px; color: #666; margin-top: 3px; }
-
         .health-status.good { border-color: #28a745; background: #d4edda; }
         .health-status.good .status-text { color: #155724; }
         .health-status.warning { border-color: #ffc107; background: #fff3cd; }
@@ -184,7 +131,7 @@
         @media (max-width: 480px) {
             .container { padding: 25px 20px; }
             .header h1 { font-size: 18px; }
-            .battery-badge .battery-id { font-size: 22px; }
+            .battery-info-card .battery-id { font-size: 22px; }
             .cell-row { flex-wrap: wrap; }
             .cell-row label { min-width: 100%; }
             .battery-specs { grid-template-columns: 1fr; }
@@ -199,21 +146,36 @@
             <span class="subtitle">Nelson Mandela University</span>
         </div>
 
-        <div class="battery-badge">
-            <div class="label">Battery ID</div>
-            <div class="battery-id">{{ battery_id }}</div>
-            {% if battery_info %}
-            <div class="battery-specs">
-                {% if battery_info.brand %}<div class="spec-item">🏷️ <span class="value">{{ battery_info.brand }}</span></div>{% endif %}
-                {% if battery_info.type %}<div class="spec-item">🔋 <span class="value">{{ battery_info.type }}</span></div>{% endif %}
-                {% if battery_info.capacity %}<div class="spec-item">📊 <span class="value">{{ battery_info.capacity }} mAh</span></div>{% endif %}
-                {% if battery_info.voltage %}<div class="spec-item">⚡ <span class="value">{{ battery_info.voltage }}V</span></div>{% endif %}
-                {% if battery_info.cells %}<div class="spec-item">🔋 <span class="value">{{ battery_info.cells }}</span></div>{% endif %}
-            </div>
-            {% endif %}
-        </div>
-
         <form method="POST" id="batteryForm">
+            <!-- Battery Number -->
+            <div class="form-group">
+                <label for="battery_id">Battery Number</label>
+                <input type="text" id="battery_id" name="battery_id" 
+                       placeholder="Enter battery number (e.g., 001 or LiPo001)" 
+                       required oninput="lookupBattery()">
+            </div>
+
+            <!-- Battery Info Display -->
+            <div id="batteryInfoCard" class="battery-info-card hidden">
+                <div class="label">Battery ID</div>
+                <div class="battery-id" id="displayBatteryId">—</div>
+                <div class="battery-specs" id="displaySpecs">
+                    <div class="spec-item">🏷️ Brand: <span class="value" id="displayBrand">—</span></div>
+                    <div class="spec-item">🔋 Type: <span class="value" id="displayType">—</span></div>
+                    <div class="spec-item">📊 Capacity: <span class="value" id="displayCapacity">—</span></div>
+                    <div class="spec-item">⚡ Voltage: <span class="value" id="displayVoltage">—</span></div>
+                    <div class="spec-item">🔋 Cells: <span class="value" id="displayCells">—</span></div>
+                </div>
+                <div class="no-specs" id="noSpecs">ℹ️ No specs available for this battery</div>
+            </div>
+
+            <!-- Number of Batteries -->
+            <div class="form-group">
+                <label for="quantity">Number of Batteries</label>
+                <input type="number" id="quantity" name="quantity" placeholder="How many batteries are you borrowing?" 
+                       min="1" max="10" required>
+            </div>
+
             <div class="form-group">
                 <label for="name">Full Name</label>
                 <input type="text" id="name" name="name" placeholder="Enter your full name" required>
@@ -237,6 +199,7 @@
                 </select>
             </div>
 
+            <!-- Cell Voltage Inputs -->
             <div id="cellInputs" class="cell-inputs hidden">
                 <div class="section-title">📊 Enter Cell Voltages</div>
                 <div id="cellInputsContainer"></div>
@@ -245,6 +208,7 @@
                 </div>
             </div>
 
+            <!-- Health Status Display -->
             <div id="healthStatus" class="health-status hidden">
                 <div class="status-icon" id="statusIcon">✅</div>
                 <div class="status-text" id="statusText">Battery is in good condition</div>
@@ -252,6 +216,7 @@
                 <div class="status-volts" id="statusVolts">⚡ Avg: 3.85V | Diff: 0.02V</div>
             </div>
 
+            <!-- Hidden field for condition -->
             <input type="hidden" id="autoCondition" name="condition" value="">
 
             <button type="submit" class="submit-btn">✓ Submit</button>
@@ -261,7 +226,53 @@
     </div>
 
     <script>
-        const cellCount = {{ battery_info.cells|default('3S')|replace('S', '')|int if battery_info and battery_info.cells else 3 }};
+        let batteryData = {};
+
+        // Lookup battery by ID (number or full ID)
+        async function lookupBattery() {
+            const input = document.getElementById('battery_id');
+            const batteryId = input.value.trim();
+            const infoCard = document.getElementById('batteryInfoCard');
+            const noSpecs = document.getElementById('noSpecs');
+            const specDisplay = document.getElementById('displaySpecs');
+
+            if (!batteryId) {
+                infoCard.classList.add('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/battery/${batteryId}`);
+                const data = await response.json();
+
+                if (data.found) {
+                    batteryData = data;
+                    document.getElementById('displayBatteryId').textContent = data.battery_id;
+                    document.getElementById('displayBrand').textContent = data.brand || '—';
+                    document.getElementById('displayType').textContent = data.type || '—';
+                    document.getElementById('displayCapacity').textContent = data.capacity ? data.capacity + ' mAh' : '—';
+                    document.getElementById('displayVoltage').textContent = data.voltage ? data.voltage + 'V' : '—';
+                    document.getElementById('displayCells').textContent = data.cells || '—';
+                    specDisplay.classList.remove('hidden');
+                    noSpecs.classList.add('hidden');
+                    infoCard.classList.remove('hidden');
+
+                    // Update cell count
+                    const cells = parseInt(data.cells) || 3;
+                    if (document.getElementById('action').value) {
+                        generateCellInputs(cells);
+                    }
+                } else {
+                    batteryData = {};
+                    specDisplay.classList.add('hidden');
+                    noSpecs.classList.remove('hidden');
+                    infoCard.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error looking up battery:', error);
+            }
+        }
+
         const actionSelect = document.getElementById('action');
         const cellInputsDiv = document.getElementById('cellInputs');
         const cellContainer = document.getElementById('cellInputsContainer');
@@ -270,16 +281,16 @@
 
         function toggleCellInputs() {
             if (actionSelect.value === 'Borrow' || actionSelect.value === 'Return') {
+                const cells = parseInt(batteryData.cells) || 3;
+                generateCellInputs(cells);
                 cellInputsDiv.classList.remove('hidden');
-                generateCellInputs();
             } else {
                 cellInputsDiv.classList.add('hidden');
                 healthStatus.classList.add('hidden');
             }
         }
 
-        function generateCellInputs() {
-            const count = cellCount || 3;
+        function generateCellInputs(count) {
             let html = '';
             for (let i = 1; i <= count; i++) {
                 html += `
@@ -298,7 +309,7 @@
         }
 
         function checkHealth() {
-            const count = cellCount || 3;
+            const count = parseInt(batteryData.cells) || 3;
             const voltages = [];
             let allFilled = true;
 
@@ -385,7 +396,7 @@
             } else {
                 condition = 'Good - Ready for Use';
                 status = '✅ Ready for Use';
-                detail = `Battery is in acceptable condition.`;
+                detail = 'Battery is in acceptable condition.';
                 icon = '✅';
                 cssClass = 'good';
             }
@@ -400,12 +411,6 @@
                 `⚡ Avg: ${avgV.toFixed(3)}V | Diff: ${diffV.toFixed(3)}V | Min: ${minV.toFixed(2)}V | Max: ${maxV.toFixed(2)}V`;
             healthStatus.classList.remove('hidden');
         }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            if (actionSelect.value === 'Borrow' || actionSelect.value === 'Return') {
-                toggleCellInputs();
-            }
-        });
     </script>
 </body>
 </html>

@@ -1,56 +1,40 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import re
 import os
-import json
 
 app = Flask(__name__)
 
-# --- Find credentials.json in multiple locations ---
+# --- Find credentials.json ---
 def find_credentials():
-    # Possible locations
     possible_paths = [
-        "credentials.json",  # Current directory
-        "/etc/secrets/credentials.json",  # Render's Secret File location
-        os.path.join(os.path.dirname(__file__), "credentials.json"),  # Same folder as app.py
-        os.path.join(os.getcwd(), "credentials.json"),  # Working directory
+        "credentials.json",
+        "/etc/secrets/credentials.json",
+        os.path.join(os.path.dirname(__file__), "credentials.json"),
+        os.path.join(os.getcwd(), "credentials.json"),
     ]
-    
     for path in possible_paths:
         if os.path.exists(path):
             print(f"Found credentials at: {path}")
             return path
-    
-    # If not found, try to read from environment variable
     env_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if env_json:
         print("Using credentials from environment variable")
-        # Save it to a temporary file
         temp_path = "/tmp/credentials.json"
         with open(temp_path, "w") as f:
             f.write(env_json)
         return temp_path
-    
     raise FileNotFoundError("Could not find credentials.json anywhere")
 
 # Google Sheets setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-# Find and load credentials
-try:
-    creds_path = find_credentials()
-    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
-    print("✅ Credentials loaded successfully!")
-except Exception as e:
-    print(f"❌ Error loading credentials: {e}")
-    raise
-
+creds_path = find_credentials()
+creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
 client = gspread.authorize(creds)
 
 SHEET_ID = "1U3VIktKv4S0w5SUx6IE2XIhiV63f9YA1s6CxSOBtNeg"
-
 spreadsheet = client.open_by_key(SHEET_ID)
 
 # --- Get or create sheets ---
@@ -101,45 +85,79 @@ def update_battery_status(battery_id, action, name):
             if action == "Borrow":
                 status_sheet.update_cell(row_number, 2, "Borrowed")
                 status_sheet.update_cell(row_number, 3, name)
-                print(f"✅ Updated: {battery_id} -> Borrowed by {name}")
             elif action == "Return":
                 status_sheet.update_cell(row_number, 2, "Available")
                 status_sheet.update_cell(row_number, 3, "")
-                print(f"✅ Updated: {battery_id} -> Available")
         else:
             new_row = [battery_id, "Borrowed" if action == "Borrow" else "Available", name if action == "Borrow" else ""]
             status_sheet.append_row(new_row)
-            print(f"✅ Added new battery: {battery_id} -> {new_row[1]}")
     except Exception as e:
-        print(f"❌ Status update error: {e}")
+        print(f"Status update error: {e}")
 
-@app.route('/battery/<battery_id>', methods=['GET', 'POST'])
-def battery_form(battery_id):
-    battery_info = None
+@app.route('/api/battery/<battery_id>')
+def api_battery_lookup(battery_id):
+    """API endpoint to look up battery specs"""
     try:
+        # Normalize battery ID
+        if battery_id.isdigit():
+            search_id = f"LiPo{battery_id.zfill(3)}"
+        else:
+            search_id = battery_id
+        
         battery_ids = inventory_sheet.col_values(1)
-        for i, bid in enumerate(battery_ids, start=1):
-            if bid.strip() == battery_id:
-                row = inventory_sheet.row_values(i)
-                battery_info = {
+        for idx, bid in enumerate(battery_ids, start=1):
+            if bid.strip() == search_id:
+                row = inventory_sheet.row_values(idx)
+                return jsonify({
+                    'found': True,
+                    'battery_id': bid,
                     'brand': row[1] if len(row) > 1 else '',
                     'type': row[2] if len(row) > 2 else '',
                     'capacity': row[3] if len(row) > 3 else '',
                     'voltage': row[4] if len(row) > 4 else '',
                     'cells': row[5] if len(row) > 5 else '3S'
-                }
-                break
+                })
+        
+        return jsonify({'found': False})
     except Exception as e:
-        print(f"Error getting battery info: {e}")
+        print(f"API error: {e}")
+        return jsonify({'found': False, 'error': str(e)})
 
+@app.route('/', methods=['GET', 'POST'])
+def index():
     if request.method == 'POST':
+        battery_id = request.form['battery_id']
+        quantity = request.form['quantity']
         name = request.form['name']
         usertype = request.form['usertype']
         action = request.form['action']
         condition = request.form['condition']
         
+        # Normalize battery ID
+        if battery_id.isdigit():
+            battery_id = f"LiPo{battery_id.zfill(3)}"
+        
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        # Get battery info
+        battery_info = None
+        try:
+            battery_ids = inventory_sheet.col_values(1)
+            for idx, bid in enumerate(battery_ids, start=1):
+                if bid.strip() == battery_id:
+                    row = inventory_sheet.row_values(idx)
+                    battery_info = {
+                        'brand': row[1] if len(row) > 1 else '',
+                        'type': row[2] if len(row) > 2 else '',
+                        'capacity': row[3] if len(row) > 3 else '',
+                        'voltage': row[4] if len(row) > 4 else '',
+                        'cells': row[5] if len(row) > 5 else '3S'
+                    }
+                    break
+        except Exception as e:
+            print(f"Error getting battery info: {e}")
+        
+        # Get cell voltages
         cell_count = parse_cells(battery_info['cells'] if battery_info else '3S')
         cell_voltages = []
         for i in range(1, cell_count + 1):
@@ -147,6 +165,7 @@ def battery_form(battery_id):
             val = request.form.get(cell_key, '')
             cell_voltages.append(val if val else '')
         
+        # Calculate health stats
         valid_voltages = [float(v) for v in cell_voltages if v and float(v) > 0]
         if valid_voltages:
             min_v = min(valid_voltages)
@@ -155,23 +174,22 @@ def battery_form(battery_id):
         else:
             min_v = max_v = diff_v = ''
         
-        sheet.append_row([timestamp, battery_id, name, request.form['usertype'], action, condition])
+        # Log to Sheet1
+        sheet.append_row([timestamp, battery_id, name, usertype, action, condition, quantity])
         
-        voltage_row = [timestamp, battery_id, name, action]
+        # Log to Cell Voltages sheet
+        voltage_row = [timestamp, battery_id, name, action, quantity]
         for i in range(6):
             voltage_row.append(cell_voltages[i] if i < len(cell_voltages) else '')
         voltage_row.extend([min_v, max_v, diff_v, condition])
+        voltage_sheet.append_row(voltage_row)
         
-        try:
-            voltage_sheet.append_row(voltage_row)
-        except Exception as e:
-            print(f"Voltage logging error: {e}")
-        
+        # Update Battery Status
         update_battery_status(battery_id, action, name)
         
         return "Submission Recorded Successfully"
     
-    return render_template('battery_form.html', battery_id=battery_id, battery_info=battery_info)
+    return render_template('battery_form.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
