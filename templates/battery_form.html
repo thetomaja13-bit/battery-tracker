@@ -28,6 +28,32 @@
         .header h1 { color: #1a3c34; font-size: 22px; font-weight: 700; }
         .header .subtitle { color: #666; font-size: 14px; }
 
+        .progress-badge {
+            text-align: center;
+            background: #eef2f1;
+            color: #1a3c34;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 30px;
+            padding: 8px 16px;
+            margin-bottom: 20px;
+            letter-spacing: 0.3px;
+        }
+        .progress-bar-track {
+            width: 100%;
+            height: 6px;
+            background: #e0e5ec;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #1a3c34, #2d5a4e);
+            border-radius: 6px;
+            transition: width 0.3s ease;
+        }
+
         .form-group { margin-bottom: 18px; }
         label { display: block; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 5px; }
 
@@ -125,6 +151,48 @@
         }
         .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(26, 60, 52, 0.35); }
         .submit-btn:active { transform: scale(0.98); }
+        .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+        .secondary-btn {
+            width: 100%;
+            padding: 14px;
+            background: #f8f9fc;
+            color: #1a3c34;
+            border: 2px solid #e0e5ec;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .secondary-btn:hover { background: #eef2f1; }
+
+        .error-msg {
+            color: #721c24;
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            margin-bottom: 14px;
+        }
+
+        .done-icon { font-size: 60px; text-align: center; margin-bottom: 10px; }
+        .done-title { text-align: center; font-size: 20px; font-weight: 700; color: #1a3c34; margin-bottom: 6px; }
+        .done-sub { text-align: center; font-size: 14px; color: #666; margin-bottom: 22px; }
+
+        .summary-list { border: 2px solid #e0e5ec; border-radius: 12px; overflow: hidden; margin-bottom: 18px; }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid #e0e5ec;
+        }
+        .summary-row:last-child { border-bottom: none; }
+        .summary-row .sid { font-weight: 700; font-family: 'Courier New', monospace; }
+        .summary-row .scond { font-size: 13px; color: #555; text-align: right; }
 
         .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #999; }
 
@@ -146,33 +214,11 @@
             <span class="subtitle">Nelson Mandela University</span>
         </div>
 
-        <form method="POST" id="batteryForm">
-            <!-- Battery Number -->
-            <div class="form-group">
-                <label for="battery_id">Battery Number</label>
-                <input type="text" id="battery_id" name="battery_id" 
-                       placeholder="Enter battery number (e.g., 001 or LiPo001)" 
-                       required oninput="lookupBattery()">
-            </div>
-
-            <!-- Battery Info Display -->
-            <div id="batteryInfoCard" class="battery-info-card hidden">
-                <div class="label">Battery ID</div>
-                <div class="battery-id" id="displayBatteryId">—</div>
-                <div class="battery-specs" id="displaySpecs">
-                    <div class="spec-item">🏷️ Brand: <span class="value" id="displayBrand">—</span></div>
-                    <div class="spec-item">🔋 Type: <span class="value" id="displayType">—</span></div>
-                    <div class="spec-item">📊 Capacity: <span class="value" id="displayCapacity">—</span></div>
-                    <div class="spec-item">⚡ Voltage: <span class="value" id="displayVoltage">—</span></div>
-                    <div class="spec-item">🔋 Cells: <span class="value" id="displayCells">—</span></div>
-                </div>
-                <div class="no-specs" id="noSpecs">ℹ️ No specs available for this battery</div>
-            </div>
-
-            <!-- Number of Batteries -->
+        <!-- ===================== STEP 0: SETUP ===================== -->
+        <div id="setupStep">
             <div class="form-group">
                 <label for="quantity">Number of Batteries</label>
-                <input type="number" id="quantity" name="quantity" placeholder="How many batteries are you borrowing?" 
+                <input type="number" id="quantity" name="quantity" placeholder="How many batteries are you borrowing/returning?"
                        min="1" max="10" required>
             </div>
 
@@ -192,11 +238,43 @@
 
             <div class="form-group">
                 <label for="action">Action</label>
-                <select id="action" name="action" required onchange="toggleCellInputs()">
+                <select id="action" name="action" required>
                     <option value="">Select action...</option>
                     <option value="Borrow">📤 Borrow</option>
                     <option value="Return">📥 Return</option>
                 </select>
+            </div>
+
+            <div id="setupError" class="error-msg hidden"></div>
+
+            <button type="button" class="submit-btn" onclick="startWizard()">Start →</button>
+        </div>
+
+        <!-- ===================== STEP 1..N: PER-BATTERY ===================== -->
+        <div id="batteryStep" class="hidden">
+            <div class="progress-badge" id="progressBadge">Battery 1 of 1</div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressFill" style="width: 0%;"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="battery_id">Battery Number</label>
+                <input type="text" id="battery_id"
+                       placeholder="Enter battery number (e.g., 001 or LiPo001)"
+                       oninput="lookupBattery()">
+            </div>
+
+            <div id="batteryInfoCard" class="battery-info-card hidden">
+                <div class="label">Battery ID</div>
+                <div class="battery-id" id="displayBatteryId">—</div>
+                <div class="battery-specs" id="displaySpecs">
+                    <div class="spec-item">🏷️ Brand: <span class="value" id="displayBrand">—</span></div>
+                    <div class="spec-item">🔋 Type: <span class="value" id="displayType">—</span></div>
+                    <div class="spec-item">📊 Capacity: <span class="value" id="displayCapacity">—</span></div>
+                    <div class="spec-item">⚡ Voltage: <span class="value" id="displayVoltage">—</span></div>
+                    <div class="spec-item">🔋 Cells: <span class="value" id="displayCells">—</span></div>
+                </div>
+                <div class="no-specs" id="noSpecs">ℹ️ No specs available for this battery</div>
             </div>
 
             <!-- Cell Voltage Inputs -->
@@ -216,19 +294,87 @@
                 <div class="status-volts" id="statusVolts">⚡ Avg: 3.85V | Diff: 0.02V</div>
             </div>
 
-            <!-- Hidden field for condition -->
-            <input type="hidden" id="autoCondition" name="condition" value="">
+            <input type="hidden" id="autoCondition" value="">
 
-            <button type="submit" class="submit-btn">✓ Submit</button>
-        </form>
+            <div id="batteryError" class="error-msg hidden"></div>
+
+            <button type="button" class="submit-btn" id="nextBtn" onclick="nextBattery()">Next Battery →</button>
+        </div>
+
+        <!-- ===================== STEP FINAL: DONE ===================== -->
+        <div id="doneStep" class="hidden">
+            <div class="done-icon">✅</div>
+            <div class="done-title">All batteries recorded!</div>
+            <div class="done-sub" id="doneSub">3 of 3 submitted successfully</div>
+            <div class="summary-list" id="summaryList"></div>
+            <button type="button" class="secondary-btn" onclick="resetWizard()">Start New Batch</button>
+        </div>
 
         <div class="footer">NMU Battery Management System</div>
     </div>
 
     <script>
-        let batteryData = {};
+        // ---------- Global state ----------
+        let setupData = {};
+        let totalBatteries = 0;
+        let currentIndex = 0;          // 1-based index of battery currently being entered
+        let completedBatteries = [];   // [{id, condition, ok}]
+        let batteryData = {};          // specs of the battery currently looked up
+        let submitting = false;
 
-        // Lookup battery by ID (number or full ID)
+        const setupStep = document.getElementById('setupStep');
+        const batteryStep = document.getElementById('batteryStep');
+        const doneStep = document.getElementById('doneStep');
+
+        // ---------- Step 0 -> Step 1 ----------
+        function startWizard() {
+            const quantity = parseInt(document.getElementById('quantity').value);
+            const name = document.getElementById('name').value.trim();
+            const usertype = document.getElementById('usertype').value;
+            const action = document.getElementById('action').value;
+            const errEl = document.getElementById('setupError');
+
+            if (!quantity || quantity < 1 || quantity > 10) {
+                errEl.textContent = 'Please enter a valid number of batteries (1-10).';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            if (!name || !usertype || !action) {
+                errEl.textContent = 'Please fill in your name, user type, and action.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            errEl.classList.add('hidden');
+
+            setupData = { name, usertype, action };
+            totalBatteries = quantity;
+            currentIndex = 1;
+            completedBatteries = [];
+
+            setupStep.classList.add('hidden');
+            batteryStep.classList.remove('hidden');
+            renderBatteryStep();
+        }
+
+        function renderBatteryStep() {
+            document.getElementById('progressBadge').textContent = `Battery ${currentIndex} of ${totalBatteries}`;
+            document.getElementById('progressFill').style.width = `${((currentIndex - 1) / totalBatteries) * 100}%`;
+
+            document.getElementById('battery_id').value = '';
+            document.getElementById('batteryInfoCard').classList.add('hidden');
+            document.getElementById('cellInputs').classList.add('hidden');
+            document.getElementById('cellInputsContainer').innerHTML = '';
+            document.getElementById('healthStatus').classList.add('hidden');
+            document.getElementById('autoCondition').value = '';
+            document.getElementById('batteryError').classList.add('hidden');
+            batteryData = {};
+
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.textContent = (currentIndex === totalBatteries) ? '✓ Submit & Finish' : 'Next Battery →';
+            nextBtn.disabled = false;
+        }
+
+        // ---------- Battery lookup (per-step) ----------
         async function lookupBattery() {
             const input = document.getElementById('battery_id');
             const batteryId = input.value.trim();
@@ -238,6 +384,9 @@
 
             if (!batteryId) {
                 infoCard.classList.add('hidden');
+                document.getElementById('cellInputs').classList.add('hidden');
+                document.getElementById('healthStatus').classList.add('hidden');
+                batteryData = {};
                 return;
             }
 
@@ -256,56 +405,38 @@
                     specDisplay.classList.remove('hidden');
                     noSpecs.classList.add('hidden');
                     infoCard.classList.remove('hidden');
-
-                    // Update cell count
-                    const cells = parseInt(data.cells) || 3;
-                    if (document.getElementById('action').value) {
-                        generateCellInputs(cells);
-                    }
                 } else {
                     batteryData = {};
                     specDisplay.classList.add('hidden');
                     noSpecs.classList.remove('hidden');
                     infoCard.classList.remove('hidden');
                 }
+
+                const cells = parseInt(batteryData.cells) || 3;
+                generateCellInputs(cells);
+                document.getElementById('cellInputs').classList.remove('hidden');
             } catch (error) {
                 console.error('Error looking up battery:', error);
             }
         }
 
-        const actionSelect = document.getElementById('action');
-        const cellInputsDiv = document.getElementById('cellInputs');
-        const cellContainer = document.getElementById('cellInputsContainer');
-        const healthStatus = document.getElementById('healthStatus');
-        const autoCondition = document.getElementById('autoCondition');
-
-        function toggleCellInputs() {
-            if (actionSelect.value === 'Borrow' || actionSelect.value === 'Return') {
-                const cells = parseInt(batteryData.cells) || 3;
-                generateCellInputs(cells);
-                cellInputsDiv.classList.remove('hidden');
-            } else {
-                cellInputsDiv.classList.add('hidden');
-                healthStatus.classList.add('hidden');
-            }
-        }
-
         function generateCellInputs(count) {
+            const cellContainer = document.getElementById('cellInputsContainer');
             let html = '';
             for (let i = 1; i <= count; i++) {
                 html += `
                     <div class="cell-row">
                         <label for="cell${i}">Cell ${i}:</label>
-                        <input type="number" step="0.01" id="cell${i}" name="cell${i}" 
-                               placeholder="0.00" min="0" max="5" 
+                        <input type="number" step="0.01" id="cell${i}"
+                               placeholder="0.00" min="0" max="5"
                                oninput="checkHealth()" required>
                         <span class="unit">V</span>
                     </div>
                 `;
             }
             cellContainer.innerHTML = html;
-            healthStatus.classList.add('hidden');
-            autoCondition.value = '';
+            document.getElementById('healthStatus').classList.add('hidden');
+            document.getElementById('autoCondition').value = '';
         }
 
         function checkHealth() {
@@ -322,6 +453,9 @@
                 }
             }
 
+            const healthStatus = document.getElementById('healthStatus');
+            const autoCondition = document.getElementById('autoCondition');
+
             if (!allFilled || voltages.length < count) {
                 healthStatus.classList.add('hidden');
                 autoCondition.value = '';
@@ -333,83 +467,161 @@
             const avgV = voltages.reduce((a, b) => a + b, 0) / voltages.length;
             const diffV = maxV - minV;
 
-            let status = '';
-            let detail = '';
-            let icon = '';
-            let cssClass = '';
-            let condition = '';
+            let status = '', detail = '', icon = '', cssClass = '', condition = '';
 
             if (minV < 3.50) {
                 condition = 'Danger - Very Low Voltage';
                 status = '🚨 CRITICAL: Very Low Voltage!';
                 detail = `Min: ${minV.toFixed(2)}V - DO NOT CHARGE! Battery may be damaged.`;
-                icon = '🚨';
-                cssClass = 'danger';
+                icon = '🚨'; cssClass = 'danger';
             } else if (maxV > 4.25) {
                 condition = 'Danger - Overcharged';
                 status = '🚨 CRITICAL: Overcharged!';
                 detail = `Max: ${maxV.toFixed(2)}V - UNSAFE! Do not use.`;
-                icon = '🚨';
-                cssClass = 'danger';
+                icon = '🚨'; cssClass = 'danger';
             } else if (diffV > 0.10) {
                 condition = 'Danger - Unbalanced';
                 status = '🚨 SEVERE: Cells Unbalanced!';
                 detail = `Difference: ${diffV.toFixed(3)}V - Battery needs inspection.`;
-                icon = '🚨';
-                cssClass = 'danger';
+                icon = '🚨'; cssClass = 'danger';
             } else if (diffV > 0.05) {
                 condition = 'Warning - Slightly Unbalanced';
                 status = '⚠️ Warning: Cells Slightly Unbalanced';
                 detail = `Difference: ${diffV.toFixed(3)}V - Balance recommended.`;
-                icon = '⚡';
-                cssClass = 'warning';
+                icon = '⚡'; cssClass = 'warning';
             } else if (avgV >= 4.18 && avgV <= 4.22) {
                 condition = 'Good - Full Charge';
                 status = '✅ Full Charge';
                 detail = 'Battery is fully charged and ready for use.';
-                icon = '✅';
-                cssClass = 'good';
+                icon = '✅'; cssClass = 'good';
             } else if (avgV >= 3.80 && avgV <= 3.85) {
                 condition = 'Good - Storage Voltage';
                 status = '✅ Storage Voltage';
                 detail = 'Battery is at ideal storage voltage.';
-                icon = '✅';
-                cssClass = 'good';
+                icon = '✅'; cssClass = 'good';
             } else if (avgV >= 3.70 && avgV < 3.80) {
                 condition = 'Warning - Low Voltage';
                 status = '⚠️ Low Voltage';
                 detail = `Charge to storage voltage (3.80-3.85V).`;
-                icon = '⚡';
-                cssClass = 'warning';
+                icon = '⚡'; cssClass = 'warning';
             } else if (avgV >= 3.50 && avgV < 3.70) {
                 condition = 'Warning - Very Low Voltage';
                 status = '⚠️ Very Low Voltage';
                 detail = `Charge immediately! Current: ${avgV.toFixed(2)}V`;
-                icon = '⚠️';
-                cssClass = 'warning';
+                icon = '⚠️'; cssClass = 'warning';
             } else if (avgV > 4.22 && avgV <= 4.25) {
                 condition = 'Warning - Slightly Overcharged';
                 status = '⚠️ Slightly Overcharged';
                 detail = `Voltage: ${avgV.toFixed(2)}V - Consider discharging.`;
-                icon = '⚠️';
-                cssClass = 'warning';
+                icon = '⚠️'; cssClass = 'warning';
             } else {
                 condition = 'Good - Ready for Use';
                 status = '✅ Ready for Use';
                 detail = 'Battery is in acceptable condition.';
-                icon = '✅';
-                cssClass = 'good';
+                icon = '✅'; cssClass = 'good';
             }
 
             autoCondition.value = condition;
-
             healthStatus.className = `health-status ${cssClass}`;
             document.getElementById('statusIcon').textContent = icon;
             document.getElementById('statusText').textContent = status;
             document.getElementById('statusDetail').textContent = detail;
-            document.getElementById('statusVolts').textContent = 
+            document.getElementById('statusVolts').textContent =
                 `⚡ Avg: ${avgV.toFixed(3)}V | Diff: ${diffV.toFixed(3)}V | Min: ${minV.toFixed(2)}V | Max: ${maxV.toFixed(2)}V`;
             healthStatus.classList.remove('hidden');
+        }
+
+        // ---------- Submit current battery, then advance ----------
+        async function nextBattery() {
+            if (submitting) return;
+
+            const batteryId = document.getElementById('battery_id').value.trim();
+            const condition = document.getElementById('autoCondition').value;
+            const errEl = document.getElementById('batteryError');
+            const count = parseInt(batteryData.cells) || 3;
+
+            if (!batteryId) {
+                errEl.textContent = 'Please enter a battery number.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            if (!condition) {
+                errEl.textContent = 'Please enter all cell voltages for this battery.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            errEl.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('battery_id', batteryId);
+            formData.append('quantity', '1');
+            formData.append('name', setupData.name);
+            formData.append('usertype', setupData.usertype);
+            formData.append('action', setupData.action);
+            formData.append('condition', condition);
+            for (let i = 1; i <= count; i++) {
+                formData.append(`cell${i}`, document.getElementById(`cell${i}`)?.value || '');
+            }
+
+            submitting = true;
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.disabled = true;
+            nextBtn.textContent = 'Submitting...';
+
+            try {
+                const response = await fetch('/', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error('Server error');
+
+                completedBatteries.push({
+                    id: (batteryData.battery_id || batteryId),
+                    condition: condition,
+                    ok: true
+                });
+
+                currentIndex++;
+                if (currentIndex > totalBatteries) {
+                    showDoneStep();
+                } else {
+                    renderBatteryStep();
+                }
+            } catch (error) {
+                console.error('Submission error:', error);
+                errEl.textContent = 'Could not submit this battery. Check your connection and try again.';
+                errEl.classList.remove('hidden');
+                nextBtn.disabled = false;
+                nextBtn.textContent = (currentIndex === totalBatteries) ? '✓ Submit & Finish' : 'Next Battery →';
+            } finally {
+                submitting = false;
+            }
+        }
+
+        function showDoneStep() {
+            batteryStep.classList.add('hidden');
+            doneStep.classList.remove('hidden');
+
+            document.getElementById('doneSub').textContent =
+                `${completedBatteries.length} of ${totalBatteries} submitted successfully`;
+
+            const list = document.getElementById('summaryList');
+            list.innerHTML = completedBatteries.map(b => `
+                <div class="summary-row">
+                    <span class="sid">${b.id}</span>
+                    <span class="scond">${b.condition}</span>
+                </div>
+            `).join('');
+        }
+
+        function resetWizard() {
+            doneStep.classList.add('hidden');
+            setupStep.classList.remove('hidden');
+            document.getElementById('quantity').value = '';
+            document.getElementById('name').value = '';
+            document.getElementById('usertype').value = '';
+            document.getElementById('action').value = '';
+            setupData = {};
+            totalBatteries = 0;
+            currentIndex = 0;
+            completedBatteries = [];
         }
     </script>
 </body>
