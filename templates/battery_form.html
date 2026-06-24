@@ -124,6 +124,7 @@
         .health-status .status-text { font-weight: 700; text-align: center; font-size: 17px; }
         .health-status .status-detail { text-align: center; font-size: 14px; color: #555; margin-top: 4px; }
         .health-status .status-volts { text-align: center; font-size: 13px; color: #666; margin-top: 3px; }
+        .health-status .suggestion { text-align: center; font-size: 15px; font-weight: 600; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; }
         .health-status.good { border-color: #28a745; background: #d4edda; }
         .health-status.good .status-text { color: #155724; }
         .health-status.warning { border-color: #ffc107; background: #fff3cd; }
@@ -176,6 +177,15 @@
             font-size: 13px;
             margin-bottom: 14px;
         }
+        .success-msg {
+            color: #155724;
+            background: #d4edda;
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            margin-bottom: 14px;
+        }
 
         .done-icon { font-size: 60px; text-align: center; margin-bottom: 10px; }
         .done-title { text-align: center; font-size: 20px; font-weight: 700; color: #1a3c34; margin-bottom: 6px; }
@@ -196,6 +206,13 @@
 
         .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #999; }
 
+        .password-container {
+            text-align: center;
+            padding: 20px 0;
+        }
+        .password-container .lock-icon { font-size: 64px; margin-bottom: 10px; }
+        .password-container .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+
         @media (max-width: 480px) {
             .container { padding: 25px 20px; }
             .header h1 { font-size: 18px; }
@@ -214,8 +231,23 @@
             <span class="subtitle">Nelson Mandela University</span>
         </div>
 
-        <!-- ===================== STEP 0: SETUP ===================== -->
-        <div id="setupStep">
+        <!-- ===================== PASSWORD STEP ===================== -->
+        <div id="passwordStep">
+            <div class="password-container">
+                <div class="lock-icon">🔐</div>
+                <h2 style="color: #1a3c34; margin-bottom: 8px;">Lab Access</h2>
+                <p class="subtitle">Please enter the lab password to continue</p>
+            </div>
+            <div class="form-group">
+                <label for="labPassword">Password</label>
+                <input type="password" id="labPassword" placeholder="Enter lab password" onkeypress="if(event.key==='Enter') verifyPassword()">
+            </div>
+            <div id="passwordError" class="error-msg hidden">Incorrect password. Please try again.</div>
+            <button type="button" class="submit-btn" onclick="verifyPassword()">Unlock →</button>
+        </div>
+
+        <!-- ===================== SETUP STEP ===================== -->
+        <div id="setupStep" class="hidden">
             <div class="form-group">
                 <label for="quantity">Number of Batteries</label>
                 <input type="number" id="quantity" name="quantity" placeholder="How many batteries are you borrowing/returning?"
@@ -250,7 +282,7 @@
             <button type="button" class="submit-btn" onclick="startWizard()">Start →</button>
         </div>
 
-        <!-- ===================== STEP 1..N: PER-BATTERY ===================== -->
+        <!-- ===================== BATTERY STEP ===================== -->
         <div id="batteryStep" class="hidden">
             <div class="progress-badge" id="progressBadge">Battery 1 of 1</div>
             <div class="progress-bar-track">
@@ -277,7 +309,7 @@
                 <div class="no-specs" id="noSpecs">ℹ️ No specs available for this battery</div>
             </div>
 
-            <!-- Cell Voltage Inputs -->
+            <!-- Cell Voltage Inputs (ONLY for Return) -->
             <div id="cellInputs" class="cell-inputs hidden">
                 <div class="section-title">📊 Enter Cell Voltages</div>
                 <div id="cellInputsContainer"></div>
@@ -292,6 +324,7 @@
                 <div class="status-text" id="statusText">Battery is in good condition</div>
                 <div class="status-detail" id="statusDetail">All cells balanced</div>
                 <div class="status-volts" id="statusVolts">⚡ Avg: 3.85V | Diff: 0.02V</div>
+                <div class="suggestion" id="suggestionText">✅ Ready for storage.</div>
             </div>
 
             <input type="hidden" id="autoCondition" value="">
@@ -301,7 +334,7 @@
             <button type="button" class="submit-btn" id="nextBtn" onclick="nextBattery()">Next Battery →</button>
         </div>
 
-        <!-- ===================== STEP FINAL: DONE ===================== -->
+        <!-- ===================== DONE STEP ===================== -->
         <div id="doneStep" class="hidden">
             <div class="done-icon">✅</div>
             <div class="done-title">All batteries recorded!</div>
@@ -317,16 +350,54 @@
         // ---------- Global state ----------
         let setupData = {};
         let totalBatteries = 0;
-        let currentIndex = 0;          // 1-based index of battery currently being entered
-        let completedBatteries = [];   // [{id, condition, ok}]
-        let batteryData = {};          // specs of the battery currently looked up
+        let currentIndex = 0;
+        let completedBatteries = [];
+        let batteryData = {};
         let submitting = false;
+        let isAuthenticated = false;
 
+        const passwordStep = document.getElementById('passwordStep');
         const setupStep = document.getElementById('setupStep');
         const batteryStep = document.getElementById('batteryStep');
         const doneStep = document.getElementById('doneStep');
 
-        // ---------- Step 0 -> Step 1 ----------
+        // ---------- Password Verification ----------
+        async function verifyPassword() {
+            const password = document.getElementById('labPassword').value.trim();
+            const errEl = document.getElementById('passwordError');
+
+            if (!password) {
+                errEl.textContent = 'Please enter the lab password.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/check_password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: password })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    isAuthenticated = true;
+                    passwordStep.classList.add('hidden');
+                    setupStep.classList.remove('hidden');
+                    errEl.classList.add('hidden');
+                } else {
+                    errEl.textContent = data.error || 'Incorrect password. Please try again.';
+                    errEl.classList.remove('hidden');
+                    document.getElementById('labPassword').value = '';
+                }
+            } catch (error) {
+                console.error('Password error:', error);
+                errEl.textContent = 'Network error. Please try again.';
+                errEl.classList.remove('hidden');
+            }
+        }
+
+        // ---------- Setup ----------
         function startWizard() {
             const quantity = parseInt(document.getElementById('quantity').value);
             const name = document.getElementById('name').value.trim();
@@ -339,8 +410,18 @@
                 errEl.classList.remove('hidden');
                 return;
             }
-            if (!name || !usertype || !action) {
-                errEl.textContent = 'Please fill in your name, user type, and action.';
+            if (!name) {
+                errEl.textContent = 'Please enter your name.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            if (!usertype) {
+                errEl.textContent = 'Please select your user type.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            if (!action) {
+                errEl.textContent = 'Please select an action.';
                 errEl.classList.remove('hidden');
                 return;
             }
@@ -374,13 +455,14 @@
             nextBtn.disabled = false;
         }
 
-        // ---------- Battery lookup (per-step) ----------
+        // ---------- Battery lookup ----------
         async function lookupBattery() {
             const input = document.getElementById('battery_id');
             const batteryId = input.value.trim();
             const infoCard = document.getElementById('batteryInfoCard');
             const noSpecs = document.getElementById('noSpecs');
             const specDisplay = document.getElementById('displaySpecs');
+            const errEl = document.getElementById('batteryError');
 
             if (!batteryId) {
                 infoCard.classList.add('hidden');
@@ -405,18 +487,55 @@
                     specDisplay.classList.remove('hidden');
                     noSpecs.classList.add('hidden');
                     infoCard.classList.remove('hidden');
+
+                    // Check access for students
+                    const usertype = setupData.usertype;
+                    if (usertype === 'Student') {
+                        const accessCheck = await fetch('/api/check_access', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ battery_id: batteryId, user_type: usertype })
+                        });
+                        const accessData = await accessCheck.json();
+                        if (!accessData.allowed) {
+                            errEl.textContent = accessData.message;
+                            errEl.classList.remove('hidden');
+                            document.getElementById('nextBtn').disabled = true;
+                            return;
+                        } else {
+                            errEl.classList.add('hidden');
+                            document.getElementById('nextBtn').disabled = false;
+                        }
+                    } else {
+                        errEl.classList.add('hidden');
+                        document.getElementById('nextBtn').disabled = false;
+                    }
+
+                    // Show cell inputs ONLY for Return
+                    const action = setupData.action;
+                    if (action === 'Return') {
+                        const cells = parseInt(data.cells) || 3;
+                        generateCellInputs(cells);
+                        document.getElementById('cellInputs').classList.remove('hidden');
+                    } else {
+                        document.getElementById('cellInputs').classList.add('hidden');
+                        document.getElementById('healthStatus').classList.add('hidden');
+                    }
                 } else {
                     batteryData = {};
                     specDisplay.classList.add('hidden');
                     noSpecs.classList.remove('hidden');
                     infoCard.classList.remove('hidden');
+                    document.getElementById('cellInputs').classList.add('hidden');
+                    document.getElementById('healthStatus').classList.add('hidden');
+                    errEl.textContent = 'Battery not found in inventory. Please check the number.';
+                    errEl.classList.remove('hidden');
+                    document.getElementById('nextBtn').disabled = true;
                 }
-
-                const cells = parseInt(batteryData.cells) || 3;
-                generateCellInputs(cells);
-                document.getElementById('cellInputs').classList.remove('hidden');
             } catch (error) {
                 console.error('Error looking up battery:', error);
+                errEl.textContent = 'Network error. Please try again.';
+                errEl.classList.remove('hidden');
             }
         }
 
@@ -467,58 +586,68 @@
             const avgV = voltages.reduce((a, b) => a + b, 0) / voltages.length;
             const diffV = maxV - minV;
 
-            let status = '', detail = '', icon = '', cssClass = '', condition = '';
+            let status = '', detail = '', icon = '', cssClass = '', condition = '', suggestion = '';
 
             if (minV < 3.50) {
                 condition = 'Danger - Very Low Voltage';
                 status = '🚨 CRITICAL: Very Low Voltage!';
                 detail = `Min: ${minV.toFixed(2)}V - DO NOT CHARGE! Battery may be damaged.`;
                 icon = '🚨'; cssClass = 'danger';
+                suggestion = '🚨 DO NOT CHARGE! Report this battery to the lab technician immediately.';
             } else if (maxV > 4.25) {
                 condition = 'Danger - Overcharged';
                 status = '🚨 CRITICAL: Overcharged!';
                 detail = `Max: ${maxV.toFixed(2)}V - UNSAFE! Do not use.`;
                 icon = '🚨'; cssClass = 'danger';
+                suggestion = '🚨 DO NOT USE! Report this battery to the lab technician immediately.';
             } else if (diffV > 0.10) {
                 condition = 'Danger - Unbalanced';
                 status = '🚨 SEVERE: Cells Unbalanced!';
                 detail = `Difference: ${diffV.toFixed(3)}V - Battery needs inspection.`;
                 icon = '🚨'; cssClass = 'danger';
+                suggestion = '🚨 DO NOT USE! Report this battery to the lab technician immediately.';
             } else if (diffV > 0.05) {
                 condition = 'Warning - Slightly Unbalanced';
                 status = '⚠️ Warning: Cells Slightly Unbalanced';
                 detail = `Difference: ${diffV.toFixed(3)}V - Balance recommended.`;
                 icon = '⚡'; cssClass = 'warning';
+                suggestion = '🔄 Balance charge recommended before next use.';
             } else if (avgV >= 4.18 && avgV <= 4.22) {
                 condition = 'Good - Full Charge';
                 status = '✅ Full Charge';
                 detail = 'Battery is fully charged and ready for use.';
                 icon = '✅'; cssClass = 'good';
+                suggestion = '✅ Battery is full. You may store it or use it.';
             } else if (avgV >= 3.80 && avgV <= 3.85) {
                 condition = 'Good - Storage Voltage';
                 status = '✅ Storage Voltage';
                 detail = 'Battery is at ideal storage voltage.';
                 icon = '✅'; cssClass = 'good';
+                suggestion = '✅ Ready for storage. Place battery in the designated storage area.';
             } else if (avgV >= 3.70 && avgV < 3.80) {
                 condition = 'Warning - Low Voltage';
                 status = '⚠️ Low Voltage';
                 detail = `Charge to storage voltage (3.80-3.85V).`;
                 icon = '⚡'; cssClass = 'warning';
+                suggestion = '⚡ Charge to storage voltage (3.80-3.85V) before storing.';
             } else if (avgV >= 3.50 && avgV < 3.70) {
                 condition = 'Warning - Very Low Voltage';
                 status = '⚠️ Very Low Voltage';
                 detail = `Charge immediately! Current: ${avgV.toFixed(2)}V`;
                 icon = '⚠️'; cssClass = 'warning';
+                suggestion = '⚠️ Charge immediately! Battery is at critical level.';
             } else if (avgV > 4.22 && avgV <= 4.25) {
                 condition = 'Warning - Slightly Overcharged';
                 status = '⚠️ Slightly Overcharged';
                 detail = `Voltage: ${avgV.toFixed(2)}V - Consider discharging.`;
                 icon = '⚠️'; cssClass = 'warning';
+                suggestion = '⚡ Consider discharging to storage voltage (3.80-3.85V).';
             } else {
                 condition = 'Good - Ready for Use';
                 status = '✅ Ready for Use';
                 detail = 'Battery is in acceptable condition.';
                 icon = '✅'; cssClass = 'good';
+                suggestion = '✅ Battery is in good condition.';
             }
 
             autoCondition.value = condition;
@@ -528,27 +657,32 @@
             document.getElementById('statusDetail').textContent = detail;
             document.getElementById('statusVolts').textContent =
                 `⚡ Avg: ${avgV.toFixed(3)}V | Diff: ${diffV.toFixed(3)}V | Min: ${minV.toFixed(2)}V | Max: ${maxV.toFixed(2)}V`;
+            document.getElementById('suggestionText').textContent = suggestion;
             healthStatus.classList.remove('hidden');
         }
 
-        // ---------- Submit current battery, then advance ----------
+        // ---------- Submit current battery ----------
         async function nextBattery() {
             if (submitting) return;
 
             const batteryId = document.getElementById('battery_id').value.trim();
             const condition = document.getElementById('autoCondition').value;
             const errEl = document.getElementById('batteryError');
-            const count = parseInt(batteryData.cells) || 3;
+            const action = setupData.action;
 
             if (!batteryId) {
                 errEl.textContent = 'Please enter a battery number.';
                 errEl.classList.remove('hidden');
                 return;
             }
-            if (!condition) {
-                errEl.textContent = 'Please enter all cell voltages for this battery.';
-                errEl.classList.remove('hidden');
-                return;
+
+            // For Return: require cell voltages
+            if (action === 'Return') {
+                if (!condition) {
+                    errEl.textContent = 'Please enter all cell voltages for this battery.';
+                    errEl.classList.remove('hidden');
+                    return;
+                }
             }
             errEl.classList.add('hidden');
 
@@ -558,9 +692,14 @@
             formData.append('name', setupData.name);
             formData.append('usertype', setupData.usertype);
             formData.append('action', setupData.action);
-            formData.append('condition', condition);
-            for (let i = 1; i <= count; i++) {
-                formData.append(`cell${i}`, document.getElementById(`cell${i}`)?.value || '');
+            formData.append('condition', condition || 'Good');
+
+            // Get cell voltages (only for Return)
+            if (action === 'Return') {
+                const count = parseInt(batteryData.cells) || 3;
+                for (let i = 1; i <= count; i++) {
+                    formData.append(`cell${i}`, document.getElementById(`cell${i}`)?.value || '');
+                }
             }
 
             submitting = true;
@@ -570,11 +709,19 @@
 
             try {
                 const response = await fetch('/', { method: 'POST', body: formData });
-                if (!response.ok) throw new Error('Server error');
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.message || 'Server error');
+                }
+
+                // Get suggestion from response
+                const suggestion = data.suggestion || '';
 
                 completedBatteries.push({
                     id: (batteryData.battery_id || batteryId),
-                    condition: condition,
+                    condition: condition || 'Good',
+                    suggestion: suggestion,
                     ok: true
                 });
 
@@ -586,7 +733,7 @@
                 }
             } catch (error) {
                 console.error('Submission error:', error);
-                errEl.textContent = 'Could not submit this battery. Check your connection and try again.';
+                errEl.textContent = error.message || 'Could not submit this battery. Please try again.';
                 errEl.classList.remove('hidden');
                 nextBtn.disabled = false;
                 nextBtn.textContent = (currentIndex === totalBatteries) ? '✓ Submit & Finish' : 'Next Battery →';
@@ -606,7 +753,7 @@
             list.innerHTML = completedBatteries.map(b => `
                 <div class="summary-row">
                     <span class="sid">${b.id}</span>
-                    <span class="scond">${b.condition}</span>
+                    <span class="scond">${b.condition}${b.suggestion ? ' - ' + b.suggestion : ''}</span>
                 </div>
             `).join('');
         }
