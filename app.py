@@ -7,7 +7,7 @@ import os
 from gspread.utils import rowcol_to_a1
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # For session management
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "nmu-battery-tracker-dev-key-change-me")
 
 # --- Find credentials.json ---
 def find_credentials():
@@ -67,7 +67,7 @@ try:
     voltage_sheet = spreadsheet.worksheet("Cell Voltages")
 except gspread.exceptions.WorksheetNotFound:
     voltage_sheet = spreadsheet.add_worksheet(title="Cell Voltages", rows="1000", cols="20")
-    voltage_sheet.update('A1:O1', [['Timestamp', 'Battery ID', 'Name', 'UserType', 'Action', 'Quantity',
+    voltage_sheet.update('A1:Q1', [['Timestamp', 'Battery ID', 'Name', 'UserType', 'Action', 'Quantity',
                                     'Cell 1', 'Cell 2', 'Cell 3', 'Cell 4', 'Cell 5', 'Cell 6',
                                     'Min Voltage', 'Max Voltage', 'Difference', 'Condition', 'Suggestion']])
 
@@ -78,6 +78,24 @@ def safe_append_row(worksheet, row_values):
     start_cell = rowcol_to_a1(next_row, 1)
     end_cell = rowcol_to_a1(next_row, len(row_values))
     worksheet.update(f'{start_cell}:{end_cell}', [row_values], value_input_option='USER_ENTERED')
+
+def normalize_battery_id(raw_id):
+    """Normalize a typed battery ID. A bare number (e.g. '7') is checked
+    against both LIPO and LIION prefixes to see which one actually exists
+    in the inventory; anything else is just trimmed. Matching is always
+    case-insensitive, since real IDs are stored as LIPO001 / LIION001."""
+    raw_id = raw_id.strip()
+    if raw_id.isdigit():
+        candidates = [f"LIPO{raw_id.zfill(3)}", f"LIION{raw_id.zfill(3)}"]
+        try:
+            existing_ids = [bid.strip().upper() for bid in inventory_sheet.col_values(1)]
+            for cand in candidates:
+                if cand in existing_ids:
+                    return cand
+        except Exception as e:
+            print(f"normalize_battery_id lookup error: {e}")
+        return candidates[0]  # default to LiPo if no match found anywhere
+    return raw_id
 
 def parse_cells(cells_str):
     if not cells_str:
@@ -145,15 +163,11 @@ def update_battery_status(battery_id, action, name):
 def api_battery_lookup(battery_id):
     """API endpoint to look up battery specs"""
     try:
-        # Normalize battery ID
-        if battery_id.isdigit():
-            search_id = f"LiPo{battery_id.zfill(3)}"
-        else:
-            search_id = battery_id
-        
+        search_id = normalize_battery_id(battery_id)
+
         battery_ids = inventory_sheet.col_values(1)
         for idx, bid in enumerate(battery_ids, start=1):
-            if bid.strip() == search_id:
+            if bid.strip().upper() == search_id.upper():
                 row = inventory_sheet.row_values(idx)
                 return jsonify({
                     'found': True,
@@ -194,15 +208,11 @@ def check_access():
     
     # If student, check battery cells
     try:
-        # Normalize battery ID
-        if battery_id.isdigit():
-            search_id = f"LiPo{battery_id.zfill(3)}"
-        else:
-            search_id = battery_id
-        
+        search_id = normalize_battery_id(battery_id)
+
         battery_ids = inventory_sheet.col_values(1)
         for idx, bid in enumerate(battery_ids, start=1):
-            if bid.strip() == search_id:
+            if bid.strip().upper() == search_id.upper():
                 row = inventory_sheet.row_values(idx)
                 cells = row[5] if len(row) > 5 else '3S'
                 if is_battery_restricted_for_student(cells):
@@ -222,6 +232,8 @@ def check_access():
 def index():
     # Check if user is authenticated via session
     if not session.get('authenticated'):
+        if request.method == 'POST':
+            return jsonify({'success': False, 'message': 'Your session expired. Please refresh the page and log in again.'}), 401
         return render_template('battery_form.html', require_password=True)
     
     if request.method == 'POST':
@@ -233,8 +245,7 @@ def index():
         condition = request.form.get('condition', '')
         
         # Normalize battery ID
-        if battery_id.isdigit():
-            battery_id = f"LiPo{battery_id.zfill(3)}"
+        battery_id = normalize_battery_id(battery_id)
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -243,7 +254,7 @@ def index():
         try:
             battery_ids = inventory_sheet.col_values(1)
             for idx, bid in enumerate(battery_ids, start=1):
-                if bid.strip() == battery_id:
+                if bid.strip().upper() == battery_id.upper():
                     row = inventory_sheet.row_values(idx)
                     battery_info = {
                         'brand': row[1] if len(row) > 1 else '',
